@@ -112,7 +112,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && (
           <div>
             <h1 style={{ fontSize: "24px", lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: 900, fontFamily: "'Inter', sans-serif", color: "#ffffff", whiteSpace: "nowrap" }}>
-              SaveCircle AI
+              Kolo AI
             </h1>
             <p style={{ fontSize: "14px", lineHeight: "20px", letterSpacing: "0.01em", fontWeight: 500, fontFamily: "'Geist', sans-serif", color: "rgba(211, 228, 254, 0.7)", whiteSpace: "nowrap" }}>
               {isAdmin ? "Institutional Wealth" : "Community Wealth"}
@@ -305,7 +305,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 //                 whiteSpace: "nowrap",
 //               }}
 //             >
-//               SaveCircle AI
+//               Kolo AI
 //             </h1>
 //             <p
 //               style={{

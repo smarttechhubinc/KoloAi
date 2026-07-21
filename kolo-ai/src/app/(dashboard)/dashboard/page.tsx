@@ -1276,7 +1276,7 @@ function TransactionsTable({ transactions }: { transactions: any[] }) {
 //             color: "#ffffff",
 //           }}
 //         >
-//           SaveCircle AI
+//           Kolo AI
 //         </h1>
 //         <p
 //           style={{

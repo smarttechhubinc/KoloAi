@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const virtualAccount = {
       bankName: "Wema Bank",
       accountNumber: `803${Math.floor(1000000 + Math.random() * 9000000)}`,
-      accountName: `SaveCircle / ${user.user_metadata?.full_name || user.email?.split("@")[0] || "User"}`,
+      accountName: `Kolo / ${user.user_metadata?.full_name || user.email?.split("@")[0] || "User"}`,
       reference,
     };
 
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
 //     const virtualAccount = {
 //       bankName: "Wema Bank",
 //       accountNumber: `803${Math.floor(1000000 + Math.random() * 9000000)}`,
-//       accountName: `SaveCircle / ${user.user_metadata?.full_name || user.email?.split("@")[0] || "User"}`,
+//       accountName: `Kolo / ${user.user_metadata?.full_name || user.email?.split("@")[0] || "User"}`,
 //       reference,
 //     };
 

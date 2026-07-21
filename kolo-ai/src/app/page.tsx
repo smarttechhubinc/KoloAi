@@ -45,7 +45,7 @@ function TopNavBar() {
             color: "#0b1c30",
           }}
         >
-          SaveCircle AI
+          Kolo AI
         </span>
       </div>
       <div className="hidden md:flex items-center" style={{ gap: "40px" }}>
@@ -595,7 +595,7 @@ function EvolutionSection() {
           </div>
         </div>
 
-        {/* SaveCircle AI */}
+        {/* Kolo AI */}
         <div
           className="flex flex-col relative overflow-hidden"
           style={{
@@ -631,7 +631,7 @@ function EvolutionSection() {
                 letterSpacing: "0.1em",
               }}
             >
-              SaveCircle AI
+              Kolo AI
             </span>
           </div>
           <ul style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -1109,7 +1109,7 @@ function CTASection() {
               maxWidth: "672px",
             }}
           >
-            Join thousands of cooperatives already using SaveCircle AI to grow
+            Join thousands of cooperatives already using Kolo AI to grow
             their wealth smarter and faster.
           </p>
           <div
@@ -1190,7 +1190,7 @@ function Footer() {
                 color: "#0b1c30",
               }}
             >
-              SaveCircle AI
+              Kolo AI
             </span>
           </div>
           <p
@@ -1466,7 +1466,7 @@ function Footer() {
             color: "#3e4a3d",
           }}
         >
-          &copy; 2024 SaveCircle AI. All rights reserved.
+          &copy; 2026 Kolo AI. All rights reserved.
         </p>
         <div
           style={{

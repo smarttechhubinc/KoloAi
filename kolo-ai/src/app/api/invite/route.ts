@@ -22,13 +22,13 @@ export async function POST(req: NextRequest) {
     //   const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL}/join?group=${groupId}&email=${encodeURIComponent(email)}&role=${role}`;
       
       const { data, error } = await resend.emails.send({
-        from: "SaveCircle AI <onboarding@resend.dev>", // Use your verified domain in production
+        from: "Kolo AI <onboarding@resend.dev>", // Use your verified domain in production
         to: [email],
-        subject: `${inviterName} invited you to join ${groupName} on SaveCircle AI`,
+        subject: `${inviterName} invited you to join ${groupName} on Kolo AI`,
         html: `
           <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #f8f9ff;">
             <div style="background-color: #0b1c30; padding: 30px; border-radius: 16px 16px 0 0; text-align: center;">
-              <h1 style="color: #62df7d; margin: 0; font-size: 28px;">SaveCircle AI</h1>
+              <h1 style="color: #62df7d; margin: 0; font-size: 28px;">Kolo AI</h1>
               <p style="color: #eaf1ff; margin-top: 8px; font-size: 14px;">AI-Powered Community Wealth</p>
             </div>
             

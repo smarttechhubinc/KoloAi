@@ -633,7 +633,7 @@ const th: React.CSSProperties = { padding: "16px 24px", fontSize: "12px", fontWe
 //                   }}
 //                 >
 //                   <span style={{ color: "#006b2c", fontWeight: 500, fontSize: "14px" }}>
-//                     https://savecircle.ai/join/{id?.toString().slice(0, 8)}
+//                     https://Kolo.ai/join/{id?.toString().slice(0, 8)}
 //                   </span>
 //                   <button style={{ background: "none", border: "none", cursor: "pointer", color: "#3e4a3d" }}>
 //                     <span className="material-symbols-outlined">edit</span>

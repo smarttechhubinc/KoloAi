@@ -197,7 +197,7 @@ export default function LoginPage() {
               color: "#ffffff",
             }}
           >
-            SaveCircle AI
+            Kolo AI
           </span>
         </Link>
 
@@ -353,7 +353,7 @@ export default function LoginPage() {
             color: "rgba(234, 241, 255, 0.4)",
           }}
         >
-          &copy; 2026 SaveCircle AI. Built for API Conference Lagos.
+          &copy; 2026 Kolo AI. Built for API Conference Lagos.
         </p>
       </div>
 
@@ -997,7 +997,7 @@ export default function LoginPage() {
 //               color: "#ffffff",
 //             }}
 //           >
-//             SaveCircle AI
+//             Kolo AI
 //           </span>
 //         </Link>
 
@@ -1176,7 +1176,7 @@ export default function LoginPage() {
 //             color: "rgba(234, 241, 255, 0.4)",
 //           }}
 //         >
-//           &copy; 2026 SaveCircle AI. Built for API Conference Lagos.
+//           &copy; 2026 Kolo AI. Built for API Conference Lagos.
 //         </p>
 //       </div>
 

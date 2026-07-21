@@ -1751,7 +1751,7 @@ function GroupsGrid({ groups, formatNaira }: { groups: any[]; formatNaira: (amou
 //               }}
 //             >
 //               Join 150+ high-net-worth individuals investing in sustainable
-//               cashew and cocoa exports from West Africa. Secured by SaveCircle
+//               cashew and cocoa exports from West Africa. Secured by Kolo
 //               AI Insurance.
 //             </p>
 //             <div style={{ display: "flex", gap: "40px", marginBottom: "24px" }}>

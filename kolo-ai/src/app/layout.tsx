@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SaveCircle AI | The Future of Community Finance",
+  title: "Kolo AI | The Future of Community Finance",
   description:
     "Automate your cooperative, contribution circle, or savings group with AI-driven treasury tools.",
 };
