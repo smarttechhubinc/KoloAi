@@ -58,6 +58,8 @@ MONNIFY_API_KEY=your_monnify_api_key
 MONNIFY_SECRET_KEY=your_monnify_secret_key
 MONNIFY_CONTRACT_CODE=your_monnify_contract_code
 RESEND_API_KEY=your_resend_api_key
+
+
 Database Setup
 Run this SQL in your Supabase SQL Editor:
 
