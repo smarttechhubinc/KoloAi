@@ -484,6 +484,11 @@
   dependencies:
     "@tybys/wasm-util" "^0.10.3"
 
+"@netlify/plugin-nextjs@^5.15.12":
+  version "5.15.12"
+  resolved "https://registry.yarnpkg.com/@netlify/plugin-nextjs/-/plugin-nextjs-5.15.12.tgz#4c5d61781a18a2365dd91845e84b686089bd59fc"
+  integrity sha512-eydPd4gtc/OJOx9IbIJ5CRrC5K3rLxfEQS/S/fRNEAAT0qFvPoQVy23VdK3jRXKFJWXdCRl6ZudWLEZECQPSRQ==
+
 "@next/env@16.2.10":
   version "16.2.10"
   resolved "https://registry.npmjs.org/@next/env/-/env-16.2.10.tgz"

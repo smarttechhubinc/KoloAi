@@ -1,116 +1,91 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-interface DashboardData {
-  userName: string;
-  totalSavings: number;
-  monthlyContributions: number;
-  groupCount: number;
-  memberCount: number;
-  healthScore: number;
-  transactions: any[];
-  groups: any[];
-}
-
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-      if (!user) return;
+    // Get profile (safely)
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
 
-      // Get user profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+    // Get memberships with groups
+    const { data: memberships } = await supabase
+      .from("group_members")
+      .select("group_id, groups(*)")
+      .eq("user_id", user.id);
 
-      // Get user's group memberships
-      const { data: memberships } = await supabase
-        .from("group_members")
-        .select("group_id, groups(*)")
-        .eq("user_id", user.id);
+    // Get contributions
+    const { data: contributions } = await supabase
+      .from("contributions")
+      .select("amount, status, created_at, transaction_ref")
+      .eq("user_id", user.id);
 
-      // Get user's contributions
-      const { data: contributions } = await supabase
-        .from("contributions")
-        .select("amount, status, created_at")
-        .eq("user_id", user.id);
+    // Get transactions
+    const { data: transactions } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-      // Get recent transactions
-      const { data: transactions } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+    const groups = memberships?.map((m: any) => m.groups) || [];
+    const totalMembers = groups.reduce((sum: number, g: any) => sum + (g.member_count || 0), 0);
+    
+    const completedContributions = (contributions || []).filter((c: any) => c.status === "completed");
+    const totalSavings = completedContributions.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
 
-      const groups = memberships?.map((m: any) => m.groups) || [];
-      const totalMembers = groups.reduce(
-        (sum: number, g: any) => sum + (g.member_count || 0),
-        0
-      );
-      const completedContributions =
-        contributions?.filter((c: any) => c.status === "completed") || [];
-      const totalSavings = completedContributions.reduce(
-        (sum: number, c: any) => sum + c.amount,
-        0
-      );
+    const now = new Date();
+    const thisMonth = (contributions || []).filter((c: any) => {
+      const d = new Date(c.created_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const monthlyContributions = thisMonth.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
 
-      const now = new Date();
-      const thisMonth = contributions?.filter((c: any) => {
-        const d = new Date(c.created_at);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      });
-      const monthlyContributions = thisMonth?.reduce(
-        (sum: number, c: any) => sum + c.amount,
-        0
-      ) || 0;
+    const completedCount = completedContributions.length;
+    const totalCount = (contributions || []).length || 1;
+    const healthScore = Math.round((completedCount / totalCount) * 100);
 
-      const completedCount = completedContributions.length;
-      const totalCount = contributions?.length || 1;
-      const healthScore = Math.round((completedCount / totalCount) * 100);
-
-      setData({
-        userName:
-          profile?.full_name || user.user_metadata?.full_name || "Admin",
-        totalSavings,
-        monthlyContributions,
-        groupCount: groups.length,
-        memberCount: totalMembers,
-        healthScore,
-        transactions: transactions || [],
-        groups,
-      });
-      setLoading(false);
-    }
-
-    fetchDashboardData();
+    setData({
+      userName: profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+      totalSavings,
+      monthlyContributions,
+      groupCount: groups.length,
+      memberCount: totalMembers,
+      healthScore,
+      transactions: transactions || [],
+      groups,
+    });
+    setLoading(false);
   }, [supabase]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Refresh on focus
+  useEffect(() => {
+    const handleFocus = () => fetchDashboardData();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [fetchDashboardData]);
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "60vh",
-          fontFamily: "'Inter', sans-serif",
-          color: "#3e4a3d",
-          fontSize: "16px",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", fontFamily: "'Inter', sans-serif", color: "#3e4a3d", fontSize: "16px" }}>
         Loading your dashboard...
       </div>
     );
@@ -118,7 +93,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <TopHeader userName={data?.userName || "Admin"} />
+      <TopHeader userName={data?.userName || "User"} />
       <KPIRow
         totalSavings={data?.totalSavings || 0}
         monthlyContributions={data?.monthlyContributions || 0}
@@ -137,101 +112,12 @@ export default function DashboardPage() {
    =========================== */
 function TopHeader({ userName }: { userName: string }) {
   return (
-    <header
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "40px",
-      }}
-    >
+    <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "40px" }}>
       <div>
-        <h2
-          style={{
-            fontSize: "24px",
-            lineHeight: "32px",
-            letterSpacing: "-0.01em",
-            fontWeight: 600,
-            fontFamily: "'Inter', sans-serif",
-            color: "#0b1c30",
-          }}
-        >
+        <h2 style={{ fontSize: "24px", fontWeight: 600, fontFamily: "'Inter', sans-serif", color: "#0b1c30" }}>
           Welcome back, {userName}
         </h2>
-        <p
-          style={{
-            fontSize: "16px",
-            lineHeight: "24px",
-            color: "#3e4a3d",
-          }}
-        >
-          Here is your institutional wealth overview for today.
-        </p>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-        <div style={{ position: "relative", width: "256px" }}>
-          <span
-            className="material-symbols-outlined"
-            style={{
-              position: "absolute",
-              left: "12px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#6e7b6c",
-            }}
-          >
-            search
-          </span>
-          <input
-            type="text"
-            placeholder="Search analytics..."
-            style={{
-              width: "100%",
-              backgroundColor: "#eff4ff",
-              border: "1px solid rgba(189, 202, 186, 0.5)",
-              borderRadius: "12px",
-              padding: "8px 16px 8px 40px",
-              fontSize: "14px",
-              lineHeight: "20px",
-              letterSpacing: "0.01em",
-              fontWeight: 500,
-              fontFamily: "'Geist', sans-serif",
-              outline: "none",
-              transition: "all 0.2s",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-        <button
-          style={{
-            width: "40px",
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
-            backgroundColor: "#e5eeff",
-            border: "none",
-            cursor: "pointer",
-            color: "#3e4a3d",
-            position: "relative",
-            transition: "background-color 0.2s",
-          }}
-        >
-          <span className="material-symbols-outlined">notifications</span>
-          <span
-            style={{
-              position: "absolute",
-              top: "8px",
-              right: "10px",
-              width: "8px",
-              height: "8px",
-              backgroundColor: "#ba1a1a",
-              borderRadius: "50%",
-              border: "2px solid #f8f9ff",
-            }}
-          />
-        </button>
+        <p style={{ fontSize: "16px", color: "#3e4a3d" }}>Here is your wealth overview for today.</p>
       </div>
     </header>
   );
@@ -241,195 +127,39 @@ function TopHeader({ userName }: { userName: string }) {
    KPI ROW
    =========================== */
 function KPIRow({
-  totalSavings,
-  monthlyContributions,
-  groupCount,
-  memberCount,
-  healthScore,
+  totalSavings, monthlyContributions, groupCount, memberCount, healthScore,
 }: {
-  totalSavings: number;
-  monthlyContributions: number;
-  groupCount: number;
-  memberCount: number;
-  healthScore: number;
+  totalSavings: number; monthlyContributions: number; groupCount: number; memberCount: number; healthScore: number;
 }) {
-  const formatNaira = (amount: number) => {
-    return `₦${amount.toLocaleString("en-NG")}`;
-  };
+  const formatNaira = (amount: number) => `₦${amount.toLocaleString("en-NG")}`;
 
   const kpis = [
-    {
-      label: "Total Savings",
-      value: formatNaira(totalSavings),
-      change: "+2.4% vs last month",
-      icon: "savings",
-      iconBg: "rgba(0, 107, 44, 0.1)",
-      iconColor: "#006b2c",
-      trend: "trending_up",
-    },
-    {
-      label: "Monthly Contributions",
-      value: formatNaira(monthlyContributions),
-      change: monthlyContributions > 0 ? "+12% growth" : "No contributions yet",
-      icon: "payments",
-      iconBg: "rgba(86, 94, 116, 0.1)",
-      iconColor: "#565e74",
-      trend: "arrow_upward",
-    },
-    {
-      label: "Active Groups",
-      value: groupCount.toString(),
-      change: `${memberCount} Total Members`,
-      icon: "group",
-      iconBg: "rgba(130, 81, 0, 0.1)",
-      iconColor: "#825100",
-      trend: "person",
-    },
-    {
-      label: "Health Score",
-      value: healthScore.toString(),
-      suffix: "/100",
-      icon: "verified_user",
-      iconBg: "rgba(0, 107, 44, 0.1)",
-      iconColor: "#006b2c",
-      progress: healthScore,
-    },
+    { label: "Total Savings", value: formatNaira(totalSavings), change: "All time", icon: "savings", iconBg: "rgba(0, 107, 44, 0.1)", iconColor: "#006b2c" },
+    { label: "This Month", value: formatNaira(monthlyContributions), change: monthlyContributions > 0 ? "Keep it up!" : "Start contributing", icon: "payments", iconBg: "rgba(86, 94, 116, 0.1)", iconColor: "#565e74" },
+    { label: "Active Groups", value: groupCount.toString(), change: `${memberCount} Total Members`, icon: "group", iconBg: "rgba(130, 81, 0, 0.1)", iconColor: "#825100" },
+    { label: "Health Score", value: healthScore.toString(), suffix: "/100", icon: "verified_user", iconBg: "rgba(0, 107, 44, 0.1)", iconColor: "#006b2c", progress: healthScore },
   ];
 
   return (
-    <section
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
-        gap: "24px",
-        marginBottom: "40px",
-      }}
-    >
+    <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px", marginBottom: "40px" }}>
       {kpis.map((kpi) => (
-        <div
-          key={kpi.label}
-          style={{
-            background: "rgba(255, 255, 255, 0.8)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid #E2E8F0",
-            boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
-            padding: "24px",
-            borderRadius: "12px",
-            cursor: "pointer",
-            transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "8px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "14px",
-                lineHeight: "20px",
-                letterSpacing: "0.01em",
-                fontWeight: 500,
-                fontFamily: "'Geist', sans-serif",
-                color: "#3e4a3d",
-              }}
-            >
-              {kpi.label}
-            </span>
-            <span
-              className="material-symbols-outlined"
-              style={{
-                padding: "6px",
-                borderRadius: "8px",
-                backgroundColor: kpi.iconBg,
-                color: kpi.iconColor,
-                fontSize: "20px",
-              }}
-            >
-              {kpi.icon}
-            </span>
+        <div key={kpi.label} style={{ background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", border: "1px solid #E2E8F0", boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)", padding: "24px", borderRadius: "12px", cursor: "pointer", transition: "transform 0.2s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+            <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "'Geist', sans-serif", color: "#3e4a3d" }}>{kpi.label}</span>
+            <span className="material-symbols-outlined" style={{ padding: "6px", borderRadius: "8px", backgroundColor: kpi.iconBg, color: kpi.iconColor, fontSize: "20px" }}>{kpi.icon}</span>
           </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: "8px",
-              marginBottom: kpi.progress ? "12px" : "8px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "24px",
-                lineHeight: "32px",
-                letterSpacing: "-0.01em",
-                fontWeight: 700,
-                fontFamily: "'Inter', sans-serif",
-              }}
-            >
-              {kpi.value}
-            </span>
-            {kpi.suffix && (
-              <span
-                style={{
-                  fontSize: "14px",
-                  lineHeight: "20px",
-                  letterSpacing: "0.01em",
-                  fontWeight: 500,
-                  fontFamily: "'Geist', sans-serif",
-                  color: "#3e4a3d",
-                }}
-              >
-                {kpi.suffix}
-              </span>
-            )}
+          <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: kpi.progress ? "12px" : "8px" }}>
+            <span style={{ fontSize: "24px", fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>{kpi.value}</span>
+            {kpi.suffix && <span style={{ fontSize: "14px", color: "#3e4a3d" }}>{kpi.suffix}</span>}
           </div>
           {kpi.progress ? (
-            <div
-              style={{
-                width: "100%",
-                height: "6px",
-                backgroundColor: "#dce9ff",
-                borderRadius: "9999px",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  height: "100%",
-                  width: `${kpi.progress}%`,
-                  backgroundColor: "#006b2c",
-                }}
-              />
+            <div style={{ width: "100%", height: "6px", backgroundColor: "#dce9ff", borderRadius: "9999px", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${kpi.progress}%`, backgroundColor: "#006b2c" }} />
             </div>
           ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                color: "#006b2c",
-                fontSize: "12px",
-                lineHeight: "16px",
-                letterSpacing: "0.03em",
-                fontWeight: 600,
-                fontFamily: "'Geist', sans-serif",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px" }}
-              >
-                {kpi.trend}
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#006b2c", fontSize: "12px", fontWeight: 600, fontFamily: "'Geist', sans-serif" }}>
               <span>{kpi.change}</span>
             </div>
           )}
@@ -443,378 +173,47 @@ function KPIRow({
    CHARTS SECTION
    =========================== */
 function ChartsSection({ groups }: { groups: any[] }) {
-  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN"];
-
-  // Generate bars from group data or use defaults
-  const bars = groups.length > 0
-    ? groups.slice(0, 6).map((g, i) => {
-        const maxPool = Math.max(...groups.map((x: any) => x.pool_amount || 0), 1);
-        return (g.pool_amount / maxPool) * 100;
-      })
-    : [40, 55, 45, 70, 85, 100];
-
   return (
-    <section
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(12, 1fr)",
-        gap: "24px",
-        marginBottom: "40px",
-        alignItems: "stretch",
-      }}
-    >
-      {/* Savings Growth Chart */}
-      <div
-        style={{
-          gridColumn: "span 8",
-          background: "rgba(255, 255, 255, 0.8)",
-          backdropFilter: "blur(12px)",
-          border: "1px solid #E2E8F0",
-          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
-          padding: "24px",
-          borderRadius: "12px",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "40px",
-          }}
-        >
-          <h3
-            style={{
-              fontSize: "18px",
-              lineHeight: "28px",
-              fontWeight: 600,
-              fontFamily: "'Inter', sans-serif",
-            }}
-          >
-            Savings Growth
-          </h3>
-          <select
-            style={{
-              backgroundColor: "#eff4ff",
-              border: "none",
-              fontSize: "12px",
-              lineHeight: "16px",
-              letterSpacing: "0.03em",
-              fontWeight: 600,
-              fontFamily: "'Geist', sans-serif",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              outline: "none",
-              cursor: "pointer",
-            }}
-          >
-            <option>Last 6 Months</option>
-            <option>Last Year</option>
-          </select>
-        </div>
-
+    <section style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "24px", marginBottom: "40px" }}>
+      <div style={{ gridColumn: "span 8", background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", border: "1px solid #E2E8F0", boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)", padding: "24px", borderRadius: "12px", display: "flex", flexDirection: "column" }}>
+        <h3 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "24px" }}>Savings Growth</h3>
         <div style={{ flex: 1, minHeight: "300px", position: "relative" }}>
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              padding: "0 8px",
-              gap: "16px",
-            }}
-          >
-            {bars.map((height, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: 1,
-                  backgroundColor:
-                    i === bars.length - 1
-                      ? "#006b2c"
-                      : "rgba(0, 107, 44, 0.1)",
-                  borderRadius: "8px 8px 0 0",
-                  height: `${Math.max(height, 5)}%`,
-                  transition: "background-color 0.2s",
-                  cursor: "pointer",
-                  position: "relative",
-                }}
-                onMouseEnter={(e) => {
-                  if (i !== bars.length - 1) {
-                    e.currentTarget.style.backgroundColor =
-                      "rgba(0, 107, 44, 0.2)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (i !== bars.length - 1) {
-                    e.currentTarget.style.backgroundColor =
-                      "rgba(0, 107, 44, 0.1)";
-                  }
-                }}
-              />
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "space-between", padding: "0 8px", gap: "16px" }}>
+            {(groups.length > 0 ? groups.slice(0, 6).map((g: any) => Math.max((g.pool_amount || 0) / 100000 * 5, 5)) : [40, 55, 45, 70, 85, 100]).map((height: number, i: number) => (
+              <div key={i} style={{ flex: 1, backgroundColor: i === (groups.length > 0 ? groups.slice(0, 6).length - 1 : 5) ? "#006b2c" : "rgba(0, 107, 44, 0.1)", borderRadius: "8px 8px 0 0", height: `${Math.max(height, 5)}%`, transition: "background-color 0.2s", cursor: "pointer" }} />
             ))}
           </div>
         </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: "16px",
-            fontSize: "12px",
-            lineHeight: "16px",
-            letterSpacing: "0.03em",
-            fontWeight: 600,
-            fontFamily: "'Geist', sans-serif",
-            color: "#3e4a3d",
-            padding: "0 8px",
-          }}
-        >
-          {months.map((m) => (
-            <span key={m}>{m}</span>
-          ))}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "16px", fontSize: "12px", fontWeight: 600, fontFamily: "'Geist', sans-serif", color: "#3e4a3d", padding: "0 8px" }}>
+          {["JAN", "FEB", "MAR", "APR", "MAY", "JUN"].map((m) => <span key={m}>{m}</span>)}
         </div>
       </div>
 
-      {/* Right Column */}
-      <div
-        style={{
-          gridColumn: "span 4",
-          display: "flex",
-          flexDirection: "column",
-          gap: "24px",
-        }}
-      >
-        {/* Loan Analytics */}
-        <div
-          style={{
-            background: "rgba(255, 255, 255, 0.8)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid #E2E8F0",
-            boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
-            padding: "24px",
-            borderRadius: "12px",
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <h3
-            style={{
-              fontSize: "18px",
-              lineHeight: "28px",
-              fontWeight: 600,
-              fontFamily: "'Inter', sans-serif",
-              marginBottom: "40px",
-            }}
-          >
-            Group Portfolio
-          </h3>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-              padding: "16px 0",
-            }}
-          >
-            <div
-              style={{
-                width: "160px",
-                height: "160px",
-                borderRadius: "50%",
-                border: "14px solid #e5eeff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: "-14px",
-                  borderRadius: "50%",
-                  border: "14px solid #006b2c",
-                  borderRightColor: "transparent",
-                  borderBottomColor: "transparent",
-                  transform: "rotate(45deg)",
-                }}
-              />
+      <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "24px" }}>
+        <div style={{ background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", border: "1px solid #E2E8F0", boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)", padding: "24px", borderRadius: "12px", flex: 1 }}>
+          <h3 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "24px" }}>Group Portfolio</h3>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "16px 0" }}>
+            <div style={{ width: "160px", height: "160px", borderRadius: "50%", border: "14px solid #e5eeff", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ textAlign: "center" }}>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    lineHeight: "16px",
-                    letterSpacing: "0.03em",
-                    fontWeight: 600,
-                    fontFamily: "'Geist', sans-serif",
-                    color: "#3e4a3d",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Active
-                </p>
-                <p
-                  style={{
-                    fontSize: "24px",
-                    lineHeight: "32px",
-                    letterSpacing: "-0.01em",
-                    fontWeight: 700,
-                  }}
-                >
-                  68%
-                </p>
+                <p style={{ fontSize: "12px", fontWeight: 600, fontFamily: "'Geist', sans-serif", color: "#3e4a3d", textTransform: "uppercase" }}>Groups</p>
+                <p style={{ fontSize: "32px", fontWeight: 700 }}>{groups.length}</p>
               </div>
-            </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-              marginTop: "16px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                style={{
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "50%",
-                  backgroundColor: "#006b2c",
-                }}
-              />
-              <span style={{ fontSize: "12px", color: "#3e4a3d" }}>
-                Active: {groups.length}
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                style={{
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "50%",
-                  backgroundColor: "#e5eeff",
-                }}
-              />
-              <span style={{ fontSize: "12px", color: "#3e4a3d" }}>
-                Completed: 0
-              </span>
             </div>
           </div>
         </div>
 
-        {/* AI Insight */}
-        <div
-          style={{
-            backgroundColor: "#00873a",
-            color: "#f7fff2",
-            padding: "24px",
-            borderRadius: "12px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            border: "1px solid rgba(0, 107, 44, 0.2)",
-            boxShadow:
-              "0 10px 15px -3px rgba(0, 107, 44, 0.1), 0 4px 6px -2px rgba(0, 107, 44, 0.05)",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: "-50%",
-              left: "-50%",
-              width: "200%",
-              height: "200%",
-              background:
-                "radial-gradient(circle at center, rgba(0, 107, 44, 0.05) 0%, transparent 70%)",
-              zIndex: 0,
-              pointerEvents: "none",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              marginBottom: "8px",
-              position: "relative",
-              zIndex: 10,
-            }}
-          >
+        <div style={{ backgroundColor: "#00873a", color: "#f7fff2", padding: "24px", borderRadius: "12px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: "-50%", left: "-50%", width: "200%", height: "200%", background: "radial-gradient(circle at center, rgba(0, 107, 44, 0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", position: "relative", zIndex: 10 }}>
             <span className="material-symbols-outlined">auto_awesome</span>
-            <span
-              style={{
-                fontSize: "12px",
-                lineHeight: "16px",
-                letterSpacing: "0.03em",
-                fontWeight: 700,
-                fontFamily: "'Geist', sans-serif",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-              }}
-            >
-              AI Intelligence
-            </span>
+            <span style={{ fontSize: "12px", fontWeight: 700, fontFamily: "'Geist', sans-serif", textTransform: "uppercase", letterSpacing: "0.1em" }}>AI Insight</span>
           </div>
-          <p
-            style={{
-              fontSize: "16px",
-              lineHeight: "24px",
-              position: "relative",
-              zIndex: 10,
-              fontWeight: 500,
-            }}
-          >
-            {groups.length > 0
-              ? `You have ${groups.length} active group${groups.length > 1 ? "s" : ""}. Keep contributing regularly to maximize your returns.`
-              : "Start your wealth journey by creating or joining a savings group. Our AI will help you find the perfect match."}
+          <p style={{ fontSize: "16px", position: "relative", zIndex: 10, fontWeight: 500 }}>
+            {groups.length > 0 ? `You have ${groups.length} active group${groups.length > 1 ? "s" : ""}. Keep contributing regularly to maximize your returns.` : "Start your wealth journey by creating or joining a savings group."}
           </p>
-          <Link
-            href="/groups"
-            style={{
-              marginTop: "24px",
-              fontSize: "12px",
-              lineHeight: "16px",
-              letterSpacing: "0.03em",
-              fontWeight: 700,
-              fontFamily: "'Geist', sans-serif",
-              background: "none",
-              border: "none",
-              color: "#f7fff2",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              position: "relative",
-              zIndex: 10,
-              padding: 0,
-              textDecoration: "none",
-              transition: "transform 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateX(4px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateX(0)";
-            }}
-          >
-            {groups.length > 0 ? "Review detailed forecast" : "Explore groups"}
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "16px" }}
-            >
-              arrow_forward
-            </span>
+          <Link href="/groups" style={{ marginTop: "24px", fontSize: "12px", fontWeight: 700, color: "#f7fff2", display: "flex", alignItems: "center", gap: "4px", textDecoration: "none", position: "relative", zIndex: 10 }}>
+            {groups.length > 0 ? "View groups" : "Explore groups"}
+            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>arrow_forward</span>
           </Link>
         </div>
       </div>
@@ -826,144 +225,25 @@ function ChartsSection({ groups }: { groups: any[] }) {
    TRANSACTIONS TABLE
    =========================== */
 function TransactionsTable({ transactions }: { transactions: any[] }) {
-  const iconMap: Record<string, { icon: string; bg: string; color: string }> = {
-    contribution: {
-      icon: "payments",
-      bg: "#dae2fd",
-      color: "#5c647a",
-    },
-    disbursement: {
-      icon: "account_balance_wallet",
-      bg: "#ffddb8",
-      color: "#2a1700",
-    },
-    default: {
-      icon: "receipt_long",
-      bg: "#7ffc97",
-      color: "#002109",
-    },
-  };
-
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-  };
-
-  const formatNaira = (amount: number) => {
-    return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
-  };
-
-  const displayTransactions =
-    transactions.length > 0
-      ? transactions
-      : [
-          {
-            id: "demo-1",
-            monnify_ref: "MNFY_90218321",
-            created_at: new Date().toISOString(),
-            amount: 0,
-            status: "completed",
-            type: "contribution",
-          },
-        ];
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  const formatNaira = (amount: number) => `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
 
   return (
-    <section
-      style={{
-        background: "rgba(255, 255, 255, 0.8)",
-        backdropFilter: "blur(12px)",
-        border: "1px solid #E2E8F0",
-        boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)",
-        borderRadius: "12px",
-        overflow: "hidden",
-        marginBottom: "40px",
-      }}
-    >
-      <div
-        style={{
-          padding: "16px 24px",
-          borderBottom: "1px solid rgba(189, 202, 186, 0.3)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          backgroundColor: "#ffffff",
-        }}
-      >
-        <h3
-          style={{
-            fontSize: "18px",
-            lineHeight: "28px",
-            fontWeight: 600,
-            fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          Recent Transactions
-        </h3>
-        <button
-          style={{
-            color: "#006b2c",
-            fontSize: "14px",
-            lineHeight: "20px",
-            letterSpacing: "0.01em",
-            fontWeight: 700,
-            fontFamily: "'Geist', sans-serif",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          View All
-        </button>
+    <section style={{ background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", border: "1px solid #E2E8F0", boxShadow: "0 4px 20px rgba(15, 23, 42, 0.04)", borderRadius: "12px", overflow: "hidden", marginBottom: "40px" }}>
+      <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(189, 202, 186, 0.3)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#ffffff" }}>
+        <h3 style={{ fontSize: "18px", fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>Recent Transactions</h3>
       </div>
 
       <div style={{ overflowX: "auto" }}>
-        {transactions.length === 0 ? (
-          <div
-            style={{
-              padding: "60px 24px",
-              textAlign: "center",
-              color: "#3e4a3d",
-              fontSize: "14px",
-              lineHeight: "20px",
-              letterSpacing: "0.01em",
-              fontWeight: 500,
-              fontFamily: "'Geist', sans-serif",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "48px", display: "block", marginBottom: "16px", color: "#bdcaba" }}
-            >
-              receipt_long
-            </span>
+        {!transactions || transactions.length === 0 ? (
+          <div style={{ padding: "60px 24px", textAlign: "center", color: "#3e4a3d", fontSize: "14px", fontWeight: 500, fontFamily: "'Geist', sans-serif" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: "48px", display: "block", marginBottom: "16px", color: "#bdcaba" }}>receipt_long</span>
             No transactions yet. Start contributing to a group to see your activity here.
           </div>
         ) : (
-          <table
-            style={{
-              width: "100%",
-              textAlign: "left",
-              borderCollapse: "collapse",
-            }}
-          >
+          <table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse" }}>
             <thead>
-              <tr
-                style={{
-                  backgroundColor: "rgba(239, 244, 255, 0.5)",
-                  fontSize: "12px",
-                  lineHeight: "16px",
-                  letterSpacing: "0.03em",
-                  fontWeight: 600,
-                  fontFamily: "'Geist', sans-serif",
-                  color: "#3e4a3d",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
+              <tr style={{ backgroundColor: "rgba(239, 244, 255, 0.5)", fontSize: "12px", fontWeight: 600, fontFamily: "'Geist', sans-serif", color: "#3e4a3d", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 <th style={{ padding: "16px 24px" }}>Type</th>
                 <th style={{ padding: "16px 24px" }}>Reference</th>
                 <th style={{ padding: "16px 24px" }}>Date</th>
@@ -971,128 +251,29 @@ function TransactionsTable({ transactions }: { transactions: any[] }) {
                 <th style={{ padding: "16px 24px" }}>Status</th>
               </tr>
             </thead>
-            <tbody
-              style={{ borderTop: "1px solid rgba(189, 202, 186, 0.2)" }}
-            >
-              {displayTransactions.map((tx) => {
-                const iconData = iconMap[tx.type] || iconMap.default;
-                return (
-                  <tr
-                    key={tx.id}
-                    style={{
-                      borderBottom: "1px solid rgba(189, 202, 186, 0.2)",
-                      transition: "background-color 0.2s",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#eff4ff";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                    }}
-                  >
-                    <td style={{ padding: "16px 24px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "16px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "50%",
-                            backgroundColor: iconData.bg,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: iconData.color,
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: "18px" }}
-                          >
-                            {iconData.icon}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            lineHeight: "20px",
-                            letterSpacing: "0.01em",
-                            fontWeight: 700,
-                            fontFamily: "'Geist', sans-serif",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {tx.type || "Transaction"}
-                        </span>
+            <tbody style={{ borderTop: "1px solid rgba(189, 202, 186, 0.2)" }}>
+              {transactions.map((tx: any) => (
+                <tr key={tx.id} style={{ borderBottom: "1px solid rgba(189, 202, 186, 0.2)", transition: "background-color 0.2s", cursor: "pointer" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#eff4ff"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}>
+                  <td style={{ padding: "16px 24px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                      <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#dae2fd", display: "flex", alignItems: "center", justifyContent: "center", color: "#5c647a" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>payments</span>
                       </div>
-                    </td>
-                    <td
-                      style={{
-                        padding: "16px 24px",
-                        fontFamily: "monospace",
-                        fontSize: "12px",
-                        color: "#3e4a3d",
-                      }}
-                    >
-                      {tx.monnify_ref || "N/A"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "16px 24px",
-                        fontSize: "14px",
-                        lineHeight: "20px",
-                        letterSpacing: "0.01em",
-                        fontWeight: 500,
-                        fontFamily: "'Geist', sans-serif",
-                        color: "#3e4a3d",
-                      }}
-                    >
-                      {formatDate(tx.created_at)}
-                    </td>
-                    <td
-                      style={{
-                        padding: "16px 24px",
-                        fontWeight: 700,
-                        color: tx.type === "disbursement" ? "#ba1a1a" : "#0b1c30",
-                      }}
-                    >
-                      {tx.type === "disbursement" ? "-" : ""}
-                      {formatNaira(tx.amount || 0)}
-                    </td>
-                    <td style={{ padding: "16px 24px" }}>
-                      <span
-                        style={{
-                          backgroundColor:
-                            tx.status === "completed"
-                              ? "rgba(0, 107, 44, 0.1)"
-                              : tx.status === "pending"
-                              ? "#cbdbf5"
-                              : "#ffdad6",
-                          color:
-                            tx.status === "completed"
-                              ? "#006b2c"
-                              : tx.status === "pending"
-                              ? "#3f465c"
-                              : "#93000a",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          padding: "4px 8px",
-                          borderRadius: "9999px",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {tx.status || "Unknown"}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <span style={{ fontSize: "14px", fontWeight: 700, fontFamily: "'Geist', sans-serif", textTransform: "capitalize" }}>{tx.type || "Transaction"}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: "16px 24px", fontFamily: "monospace", fontSize: "12px", color: "#3e4a3d" }}>{tx.monnify_ref || "N/A"}</td>
+                  <td style={{ padding: "16px 24px", fontSize: "14px", fontWeight: 500, fontFamily: "'Geist', sans-serif", color: "#3e4a3d" }}>{formatDate(tx.created_at)}</td>
+                  <td style={{ padding: "16px 24px", fontWeight: 700 }}>{formatNaira(tx.amount || 0)}</td>
+                  <td style={{ padding: "16px 24px" }}>
+                    <span style={{ backgroundColor: tx.status === "completed" ? "rgba(0, 107, 44, 0.1)" : "#cbdbf5", color: tx.status === "completed" ? "#006b2c" : "#3f465c", fontSize: "11px", fontWeight: 700, padding: "4px 8px", borderRadius: "9999px", textTransform: "uppercase" }}>
+                      {tx.status || "Unknown"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
@@ -1100,8 +281,6 @@ function TransactionsTable({ transactions }: { transactions: any[] }) {
     </section>
   );
 }
-
-
 
 
 

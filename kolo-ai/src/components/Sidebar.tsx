@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -18,25 +17,33 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const [userName, setUserName] = useState("User");
   const [userEmail, setUserEmail] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     async function fetchUser() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Try getting name from user metadata first
         const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
         setUserName(name);
         setUserEmail(user.email || "");
         
-        // Also try getting profile from DB
         const { data: profile } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", user.id)
           .single();
         
-        if (profile?.full_name) {
-          setUserName(profile.full_name);
+        if (profile?.full_name) setUserName(profile.full_name);
+
+        // Check if user is admin of any group
+        const { data: adminGroups } = await supabase
+          .from("group_members")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("role", "admin");
+
+        if (adminGroups && adminGroups.length > 0) {
+          setIsAdmin(true);
         }
       }
     }
@@ -49,16 +56,28 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     router.refresh();
   };
 
-  const navItems = [
+  const getInitials = (name: string) =>
+    name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "U";
+
+  // Base nav items (everyone sees these)
+  const baseNavItems = [
     { icon: "dashboard", label: "Dashboard", href: "/dashboard" },
     { icon: "groups", label: "My Groups", href: "/groups" },
-    { icon: "psychology", label: "Treasurer AI", href: "/treasurer" },
     { icon: "account_balance_wallet", label: "Payments", href: "/payments" },
+  ];
+
+  // Admin-only nav items
+  const adminNavItems = [
+    { icon: "psychology", label: "Treasurer AI", href: "/treasurer", adminOnly: true },
+  ];
+
+  // Bottom items (everyone sees)
+  const bottomNavItems = [
     { icon: "settings", label: "Settings", href: "/settings" },
   ];
 
-  const getInitials = (name: string) =>
-    name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "U";
+  // Combine based on role
+  const navItems = [...baseNavItems, ...(isAdmin ? adminNavItems : []), ...bottomNavItems];
 
   return (
     <aside
@@ -96,7 +115,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               SaveCircle AI
             </h1>
             <p style={{ fontSize: "14px", lineHeight: "20px", letterSpacing: "0.01em", fontWeight: 500, fontFamily: "'Geist', sans-serif", color: "rgba(211, 228, 254, 0.7)", whiteSpace: "nowrap" }}>
-              Institutional Wealth
+              {isAdmin ? "Institutional Wealth" : "Community Wealth"}
             </p>
           </div>
         )}
@@ -171,7 +190,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               New Group
             </Link>
 
-            {/* User Profile */}
             <div style={{ marginTop: "24px", display: "flex", alignItems: "center", gap: "16px", padding: "8px", backgroundColor: "rgba(211, 228, 254, 0.05)", borderRadius: "8px" }}>
               <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#00873a", color: "#f7fff2", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", flexShrink: 0 }}>
                 {getInitials(userName)}
@@ -181,7 +199,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   {userName}
                 </p>
                 <p style={{ fontSize: "12px", color: "#d3e4fe", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {userEmail || "Premium Account"}
+                  {isAdmin ? "Group Admin" : userEmail || "Member"}
                 </p>
               </div>
               <button
@@ -216,7 +234,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     </aside>
   );
 }
-
 
 // "use client";
 
